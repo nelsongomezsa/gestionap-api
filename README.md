@@ -1,113 +1,110 @@
 # GestionAp API
 
-API REST para la gestión de habitaciones en alquiler, inquilinos y contratos. Es la evolución backend del proyecto de escritorio **GestionAp** (JavaFX + MySQL), reescrita como aplicación en capas con Spring Boot para practicar diseño de endpoints REST, Spring Data JPA y arquitectura de servicios.
+**API REST para gestionar habitaciones en alquiler, inquilinos y contratos, con la regla de negocio clave automatizada: al firmar un contrato la habitación queda ocupada y al finalizarlo vuelve a estar disponible.**
+
+![Java](https://img.shields.io/badge/Java-17-ED8B00?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-6DB33F?logo=springboot&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-C71A36?logo=apachemaven&logoColor=white)
+![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-yellow)
+
+> **English summary:** REST API (Java 17, Spring Boot 3.3, Spring Data JPA) to manage rental rooms, tenants and contracts. Layered architecture, DTOs, Bean Validation and a global JSON error handler. Creating a contract marks the room as occupied and ending it frees the room again. Runs out of the box on H2 with sample data, with an optional MySQL profile.
+
+---
+
+## Qué resuelve
+
+Es la versión backend de la app de escritorio GestionAp: los mismos datos (habitaciones, inquilinos y contratos), pero expuestos como API para que cualquier cliente, web o móvil, pueda usarlos.
+
+## Funcionalidades
+
+- **Habitaciones** con estado `DISPONIBLE`, `OCUPADA` o `EN_MANTENIMIENTO`, y filtro por estado.
+- **Inquilinos** con documento de identidad y email únicos, y teléfono.
+- **Contratos** entre una habitación y un inquilino, con filtros por habitación, por inquilino o solo activos.
+- **Regla de negocio en el servicio**: crear un contrato exige una habitación disponible y la marca como ocupada; finalizarlo la libera.
+- **Errores JSON homogéneos**: `404` si no existe, `409` si hay un conflicto de negocio y `400` si los datos no son válidos.
+- **Datos de ejemplo** precargados al arrancar.
 
 ## Stack
 
-- Java 17
-- Spring Boot 3.3.4 (Web, Data JPA, Validation)
-- H2 (base de datos en memoria, perfil por defecto)
-- MySQL (perfil alternativo, mismo motor que la versión de escritorio)
-- Maven
+| Capa | Tecnología |
+|---|---|
+| Lenguaje | Java 17 |
+| Framework | Spring Boot 3.3 (Web, Data JPA, Validation) |
+| Persistencia | H2 en memoria (por defecto) · MySQL (perfil `mysql`) |
+| Build | Maven |
 
 ## Arquitectura
 
-```
-model/       → entidades JPA (Habitacion, Inquilino, Contrato)
-repository/  → interfaces Spring Data JPA
-service/     → lógica de negocio y transacciones
-controller/  → endpoints REST
-dto/         → objetos de entrada/salida que no son entidades
-exception/   → excepciones propias y manejador global de errores
-```
-
-Las tres entidades:
-
-- **Habitacion**: `codigo`, `direccion`, `precioMensual`, `estado` (`DISPONIBLE`, `OCUPADA`, `EN_MANTENIMIENTO`).
-- **Inquilino**: `nombre`, `documentoIdentidad`, `email`, `telefono`.
-- **Contrato**: vincula una `Habitacion` con un `Inquilino` entre `fechaInicio` y `fechaFin` (fecha fin nula = contrato activo).
-
-Al crear un contrato, la habitación pasa automáticamente a `OCUPADA`; al finalizarlo, vuelve a `DISPONIBLE`. Esa regla vive en `ContratoService`, no en el controller.
-
-## Cómo ejecutar
-
-### Opción 1: H2 en memoria (por defecto, sin configuración)
-
-```bash
-mvn spring-boot:run
+```mermaid
+flowchart LR
+    Cliente["Cliente<br/>curl · Postman"] --> C["controller<br/>endpoints REST"]
+    C --> S["service<br/>reglas de negocio"]
+    S --> R["repository<br/>Spring Data JPA"]
+    R --> DB[("H2 / MySQL")]
+    C -.-> E["exception<br/>manejador global"]
 ```
 
-La API arranca en `http://localhost:8080`. Se cargan datos de ejemplo automáticamente (`data.sql`). Consola H2 disponible en `http://localhost:8080/h2-console` (JDBC URL: `jdbc:h2:mem:gestionapdb`, usuario `sa`, sin contraseña).
+| Paquete | Qué contiene |
+|---|---|
+| `model/` | Entidades JPA: `Habitacion`, `Inquilino`, `Contrato` |
+| `repository/` | Interfaces de Spring Data JPA |
+| `service/` | Lógica de negocio y transacciones |
+| `controller/` | Endpoints REST |
+| `dto/` | Objetos de entrada y salida |
+| `exception/` | Excepciones propias y manejador global |
 
-### Opción 2: MySQL
+## Cómo ejecutarlo
 
-1. Crear la base de datos (o dejar que `createDatabaseIfNotExist=true` la cree).
-2. Ajustar usuario/contraseña en `src/main/resources/application-mysql.properties`.
-3. Ejecutar:
+Requisitos: Java 17 y Maven.
 
-```bash
-mvn spring-boot:run -Dspring-boot.run.profiles=mysql
+1. **Clona el repositorio**
+   ```bash
+   git clone https://github.com/nelsongomezsa/gestionap-api.git && cd gestionap-api
+   ```
+2. **Arranca la API** (H2 en memoria, con datos de ejemplo)
+   ```bash
+   mvn spring-boot:run
+   ```
+3. **Pruébala**
+   ```bash
+   curl "http://localhost:8080/api/contratos?activos=true"
+   ```
+
+Consola H2 en `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:gestionapdb`, usuario `sa`, sin contraseña). Para MySQL, ajusta `src/main/resources/application-mysql.properties` y arranca con `-Dspring-boot.run.profiles=mysql`.
+
+Respuesta real del paso 3 con los datos de ejemplo:
+
+```json
+[{"id":1,"fechaInicio":"2026-01-01","fechaFin":null,
+  "habitacion":{"id":2,"codigo":"H-102","direccion":"Calle Mayor 12, 1B","precioMensual":480.00,"estado":"OCUPADA"},
+  "inquilino":{"id":1,"nombre":"Laura Gomez","documentoIdentidad":"11111111A","email":"laura.gomez@example.com","telefono":"600111222"}}]
 ```
 
 ## Endpoints
 
-### Habitaciones
-
-| Método | Ruta | Descripción |
+| Recurso | Método y ruta | Descripción |
 |---|---|---|
-| GET | `/api/habitaciones` | Listar todas (opcional `?estado=DISPONIBLE`) |
-| GET | `/api/habitaciones/{id}` | Buscar por id |
-| POST | `/api/habitaciones` | Crear |
-| PUT | `/api/habitaciones/{id}` | Actualizar |
-| DELETE | `/api/habitaciones/{id}` | Eliminar |
-
-```bash
-curl -X POST http://localhost:8080/api/habitaciones \
-  -H "Content-Type: application/json" \
-  -d '{"codigo":"H-301","direccion":"Calle Sol 3, 3A","precioMensual":500}'
-```
-
-### Inquilinos
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `/api/inquilinos` | Listar todos |
-| GET | `/api/inquilinos/{id}` | Buscar por id |
-| POST | `/api/inquilinos` | Crear |
-| PUT | `/api/inquilinos/{id}` | Actualizar |
-| DELETE | `/api/inquilinos/{id}` | Eliminar |
-
-```bash
-curl -X POST http://localhost:8080/api/inquilinos \
-  -H "Content-Type: application/json" \
-  -d '{"nombre":"Ana Torres","documentoIdentidad":"33333333C","email":"ana.torres@example.com","telefono":"600555666"}'
-```
-
-### Contratos
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `/api/contratos` | Listar todos (opcional `?activos=true`) |
-| GET | `/api/contratos/{id}` | Buscar por id |
-| GET | `/api/contratos/habitacion/{habitacionId}` | Contratos de una habitación |
-| GET | `/api/contratos/inquilino/{inquilinoId}` | Contratos de un inquilino |
-| POST | `/api/contratos` | Crear (requiere habitación `DISPONIBLE`) |
-| PATCH | `/api/contratos/{id}/finalizar` | Finalizar contrato (libera la habitación) |
-| DELETE | `/api/contratos/{id}` | Eliminar |
+| Habitaciones | `GET /api/habitaciones` | Listar (opcional `?estado=DISPONIBLE`) |
+| | `GET · PUT · DELETE /api/habitaciones/{id}` | Buscar, actualizar o eliminar |
+| | `POST /api/habitaciones` | Crear |
+| Inquilinos | `GET /api/inquilinos` | Listar |
+| | `GET · PUT · DELETE /api/inquilinos/{id}` | Buscar, actualizar o eliminar |
+| | `POST /api/inquilinos` | Crear |
+| Contratos | `GET /api/contratos` | Listar (opcional `?activos=true`) |
+| | `GET /api/contratos/{id}` | Buscar |
+| | `GET /api/contratos/habitacion/{habitacionId}` | Contratos de una habitación |
+| | `GET /api/contratos/inquilino/{inquilinoId}` | Contratos de un inquilino |
+| | `POST /api/contratos` | Crear (requiere habitación `DISPONIBLE`) |
+| | `PATCH /api/contratos/{id}/finalizar` | Finalizar y liberar la habitación |
+| | `DELETE /api/contratos/{id}` | Eliminar |
 
 ```bash
 curl -X POST http://localhost:8080/api/contratos \
   -H "Content-Type: application/json" \
   -d '{"habitacionId":1,"inquilinoId":1,"fechaInicio":"2026-08-01"}'
-
-curl -X PATCH http://localhost:8080/api/contratos/1/finalizar \
-  -H "Content-Type: application/json" \
-  -d '{"fechaFin":"2026-12-31"}'
 ```
 
-## Manejo de errores
-
-Todas las respuestas de error siguen el mismo formato JSON (timestamp, status, error, message, path y, en validaciones, el detalle campo a campo):
+Ejemplo de error:
 
 ```json
 {
@@ -119,11 +116,30 @@ Todas las respuestas de error siguen el mismo formato JSON (timestamp, status, e
 }
 ```
 
-- `404` → recurso no encontrado (`ResourceNotFoundException`)
-- `409` → conflicto de negocio, p. ej. código/documento/email duplicado, o habitación no disponible (`IllegalArgumentException`)
-- `400` → datos de entrada inválidos (validación de Bean Validation)
+## Tests
 
-## Notas
+```bash
+mvn test
+```
 
-- Este proyecto es una ampliación personal del GestionAp de escritorio, no un encargo de empresa: sirve para practicar y demostrar diseño de API REST en capas.
-- Con `spring.jpa.hibernate.ddl-auto=update`, el esquema se genera automáticamente a partir de las entidades; en un entorno real se sustituiría por migraciones versionadas (Flyway/Liquibase).
+Por ahora hay **1 test**, que comprueba que el contexto de Spring arranca. La lógica de contratos todavía no tiene tests propios (ver próximos pasos).
+
+## Qué aprendí
+
+- A pasar una app de escritorio a una API REST en capas con Spring Boot.
+- A poner las reglas de negocio en el servicio y no en el controlador.
+- A devolver errores coherentes con un manejador global y Bean Validation.
+
+## Próximos pasos
+
+- Tests de `ContratoService` (ocupar y liberar habitaciones) y tests de los endpoints con MockMvc.
+- Migraciones versionadas con Flyway en lugar de `ddl-auto=update`.
+- Documentación con Swagger UI.
+
+Su evolución, con seguridad JWT, roles y app iOS, es [GestionAp PRO API + iOS](https://github.com/nelsongomezsa/gestionapro).
+
+## Autor
+
+**Nelson Gómez Sánchez** · Estudiante de DAM y del Máster en Data & Analytics · [nelsongomezsa.github.io](https://nelsongomezsa.github.io) · [LinkedIn](https://www.linkedin.com/in/nelson-gómez-sánchez)
+
+Licencia [MIT](LICENSE).
