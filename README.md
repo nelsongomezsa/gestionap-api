@@ -2,6 +2,7 @@
 
 **API REST para gestionar habitaciones en alquiler, inquilinos y contratos, con la regla de negocio clave automatizada: al firmar un contrato la habitación queda ocupada y al finalizarlo vuelve a estar disponible.**
 
+[![CI](https://github.com/nelsongomezsa/gestionap-api/actions/workflows/ci.yml/badge.svg)](https://github.com/nelsongomezsa/gestionap-api/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-17-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-6DB33F?logo=springboot&logoColor=white)
 ![Maven](https://img.shields.io/badge/Maven-C71A36?logo=apachemaven&logoColor=white)
